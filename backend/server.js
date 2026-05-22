@@ -80,9 +80,14 @@ app.post('/api/records/reset', async (req, res) => {
     try {
         const mock = [
             { id: '1', timestamp: '2026-05-20T09:15', type: 'bottle_formula', detail: { bottle_volume_ml: 120 }, remark: '大口喝完' },
+            { id: 'mock_ad_1', timestamp: '2026-05-20T08:30', type: 'ad_probiotics', detail: { medication_type: 'ad' }, remark: '每天一滴，促进钙吸收' },
+            { id: 'mock_temp_1', timestamp: '2026-05-20T16:30', type: 'temperature', detail: { temperature: 37.5 }, remark: '有点微热，物理降温，多喝温水' },
             { id: '2', timestamp: '2026-05-20T07:00', type: 'blood_sugar', detail: { sugar_value: 4.8, sugar_period: 'before_feed' }, remark: '奶前测试' },
+            { id: 'mock_ad_2', timestamp: '2026-05-20T10:15', type: 'ad_probiotics', detail: { medication_type: 'probiotics' }, remark: '常温保存，改善肠胃' },
             { id: '3', timestamp: '2026-05-19T23:30', type: 'breast_live', detail: { breast_left_minutes: 15, breast_right_minutes: 10 }, remark: '吃奶入睡' },
+            { id: 'mock_temp_2', timestamp: '2026-05-19T20:00', type: 'temperature', detail: { temperature: 36.5 }, remark: '体温正常' },
             { id: '4', timestamp: '2026-05-19T18:40', type: 'diaper', detail: { diaper_status: 'mixed' }, remark: '大便金黄' },
+            { id: 'mock_remark_1', timestamp: '2026-05-19T17:00', type: 'other_remark', detail: {}, remark: '带宝宝去小区花园晒太阳，睡得很好' },
             { id: '5', timestamp: '2026-05-19T16:00', type: 'breast_bottle', detail: { bottle_volume_ml: 110 }, remark: '' },
             { id: '6', timestamp: '2026-05-19T12:00', type: 'blood_sugar', detail: { sugar_value: 5.6, sugar_period: 'after_feed_2h' }, remark: '平稳' },
             { id: '7', timestamp: '2026-05-19T08:00', type: 'growth', detail: { weight_kg: 5.35, height_cm: 57.0 }, remark: '体检顺遂' },

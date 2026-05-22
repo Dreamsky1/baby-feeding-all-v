@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import packageInfo from '../package.json';
 
 // ==================== 类型定义 (TypeScript 安全约束) ====================
-export type RecordType = 'breast_live' | 'breast_bottle' | 'bottle_formula' | 'diaper' | 'blood_sugar' | 'growth';
+export type RecordType = 'breast_live' | 'breast_bottle' | 'bottle_formula' | 'diaper' | 'blood_sugar' | 'growth' | 'ad_probiotics' | 'temperature' | 'other_remark';
 export type DiaperStatus = 'wet' | 'dirty' | 'mixed';
 export type SugarPeriod = 'before_feed' | 'after_feed_1h' | 'after_feed_2h' | 'random';
 
@@ -15,6 +16,8 @@ export interface RecordDetail {
   diaper_status?: DiaperStatus;
   weight_kg?: number;
   height_cm?: number;
+  medication_type?: 'ad' | 'probiotics' | 'mixed' | 'other';
+  temperature?: number;
 }
 
 export interface BabyRecord {
@@ -56,8 +59,21 @@ export interface SugarPoint {
   val: number;
 }
 
+export interface TempPoint {
+  id: string;
+  x: number;
+  y: number;
+  temp: string;
+  isHigh: boolean;
+  date: string;
+  time: string;
+  fullDate: string;
+  remark: string;
+}
+
 // ==================== 响应式状态管理 ====================
 const currentTab = ref<'log' | 'stats'>('log');
+const version = ref<string>(packageInfo.version);
 const activeModal = ref<RecordType | null>(null);
 const showBackendLog = ref<boolean>(false);
 
@@ -66,6 +82,9 @@ const timelineFilterDate = ref<string>('2026-05-20');
 const milkChartStartDate = ref<string>('');
 const milkChartEndDate = ref<string>('');
 const selectedChartDay = ref<DailyMilkData | null>(null);
+const tempChartStartDate = ref<string>('');
+const tempChartEndDate = ref<string>('');
+const selectedTempPoint = ref<TempPoint | null>(null);
 
 // 数据集合
 const records = ref<BabyRecord[]>([]);
@@ -82,6 +101,8 @@ const form = ref({
   diaper_status: 'wet' as DiaperStatus,
   weight_kg: 5.20,
   height_cm: 56.5,
+  medication_type: 'ad' as 'ad' | 'probiotics' | 'mixed' | 'other',
+  temperature: 36.8,
   remark: ''
 });
 
@@ -97,11 +118,13 @@ onMounted(() => {
     }
   }, 30000); // 10000 毫秒 = 10 秒
 
-  // 3. 默认设置柱状图日期范围：过去7天至今天
+  // 3. 默认设置日期范围：过去7天至今天
   const today = new Date();
   const pastWeek = new Date(Date.now() - 6 * 24 * 3600 * 1000);
   milkChartStartDate.value = pastWeek.toISOString().slice(0, 10);
   milkChartEndDate.value = today.toISOString().slice(0, 10);
+  tempChartStartDate.value = pastWeek.toISOString().slice(0, 10);
+  tempChartEndDate.value = today.toISOString().slice(0, 10);
 
   // 组件销毁时清除定时器，防止内存泄漏
   return () => {
@@ -209,6 +232,19 @@ const submitForm = async () => {
         height_cm: form.value.height_cm
       };
       break;
+    case 'ad_probiotics':
+      payload.detail = {
+        medication_type: form.value.medication_type
+      };
+      break;
+    case 'temperature':
+      payload.detail = {
+        temperature: form.value.temperature
+      };
+      break;
+    case 'other_remark':
+      payload.detail = {};
+      break;
   }
 
   try {
@@ -295,6 +331,8 @@ const openModal = (type: RecordType) => {
     diaper_status: 'wet',
     weight_kg: 5.20,
     height_cm: 56.5,
+    medication_type: 'ad',
+    temperature: 36.8,
     remark: ''
   };
   activeModal.value = type;
@@ -304,8 +342,10 @@ const closeModal = () => { activeModal.value = null; };
 
 // ==================== 计算属性 (TS 强类型约束) ====================
 const filteredRecords = computed<BabyRecord[]>(() => {
-  if (!timelineFilterDate.value) return records.value;
-  return records.value.filter(r => r.timestamp.slice(0, 10) === timelineFilterDate.value);
+  const list = timelineFilterDate.value
+    ? records.value.filter(r => r.timestamp.slice(0, 10) === timelineFilterDate.value)
+    : [...records.value];
+  return list.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 });
 
 const filteredDailyMilkData = computed<DailyMilkData[]>(() => {
@@ -442,6 +482,63 @@ const sugarChartAreaPath = computed<string>(() => {
   return `${path} L ${points[points.length - 1].x} 100 L ${points[0].x} 100 Z`;
 });
 
+const tempChartPoints = computed<TempPoint[]>(() => {
+  if (!tempChartStartDate.value || !tempChartEndDate.value) return [];
+  const list = [...records.value]
+    .filter(r => r.type === 'temperature' && r.timestamp && r.timestamp.slice(0, 10) >= tempChartStartDate.value && r.timestamp.slice(0, 10) <= tempChartEndDate.value)
+    .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  if (list.length === 0) return [];
+  const temps = list.map(r => r.detail.temperature || 36.5);
+  const maxT = Math.max(...temps, 37.5) + 0.5;
+  const minT = Math.min(...temps, 36.0) - 0.3;
+  const range = maxT - minT || 1;
+  return list.map((r, index) => {
+    const val = r.detail.temperature || 36.5;
+    const x = list.length > 1 ? 6 + (index / (list.length - 1)) * 88 : 50;
+    const y = ((val - minT) / range) * 55 + 15;
+    const d = new Date(r.timestamp);
+    const shortDate = `${d.getMonth() + 1}/${d.getDate()}`;
+    const timeStr = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+    return {
+      id: r.id,
+      x,
+      y,
+      temp: val.toFixed(1),
+      isHigh: val >= 37.3,
+      date: shortDate,
+      time: timeStr,
+      fullDate: `${shortDate} ${timeStr}`,
+      remark: r.remark || ''
+    };
+  });
+});
+
+const tempLimitLineY = computed<number>(() => {
+  if (!tempChartStartDate.value || !tempChartEndDate.value) return 35;
+  const list = [...records.value]
+    .filter(r => r.type === 'temperature' && r.timestamp && r.timestamp.slice(0, 10) >= tempChartStartDate.value && r.timestamp.slice(0, 10) <= tempChartEndDate.value);
+  if (list.length === 0) return 35;
+  const temps = list.map(r => r.detail.temperature || 36.5);
+  const maxT = Math.max(...temps, 37.5) + 0.5;
+  const minT = Math.min(...temps, 36.0) - 0.3;
+  const range = maxT - minT || 1;
+  const y = ((37.3 - minT) / range) * 55 + 15;
+  return 100 - y;
+});
+
+
+const tempChartPath = computed<string>(() => {
+  if (tempChartPoints.value.length === 0) return '';
+  return tempChartPoints.value.reduce((path, p, idx) => path + `${idx === 0 ? 'M' : 'L'} ${p.x} ${100 - p.y}`, '');
+});
+
+const tempChartAreaPath = computed<string>(() => {
+  if (tempChartPoints.value.length === 0) return '';
+  const points = tempChartPoints.value;
+  const pathStr = points.reduce((pStr, p, idx) => pStr + `${idx === 0 ? 'M' : 'L'} ${p.x} ${100 - p.y}`, '');
+  return `${pathStr} L ${points[points.length - 1].x} 100 L ${points[0].x} 100 Z`;
+});
+
 const donutChartStyle = computed<string>(() => {
   const total = todayFeedVolume.value;
   if (total === 0) return 'background: #F3F4F6;';
@@ -457,7 +554,10 @@ const getRecordStyle = (type: RecordType) => {
     bottle_formula: 'bg-[#FFF0CA] text-amber-600',
     diaper: 'bg-[#F0E5FC] text-purple-700',
     blood_sugar: 'bg-rose-100 text-rose-600 border border-rose-200',
-    growth: 'bg-[#D8ECD0] text-emerald-800'
+    growth: 'bg-[#D8ECD0] text-emerald-800',
+    ad_probiotics: 'bg-[#E6F9F9] text-cyan-700 border border-cyan-150',
+    temperature: 'bg-[#FFF5ED] text-orange-700 border border-orange-150',
+    other_remark: 'bg-[#F1F3F5] text-slate-700 border border-slate-200'
   };
   return map[type] || 'bg-gray-100';
 };
@@ -469,7 +569,10 @@ const getRecordIcon = (type: RecordType) => {
     bottle_formula: '🥛',
     diaper: '💩',
     blood_sugar: '🩸',
-    growth: '⚖️'
+    growth: '⚖️',
+    ad_probiotics: '✨',
+    temperature: '🌡️',
+    other_remark: '📝'
   };
   return map[type] || '📝';
 };
@@ -481,7 +584,10 @@ const getRecordTitle = (record: BabyRecord) => {
     bottle_formula: '瓶喂配方奶粉',
     diaper: '尿布更换',
     blood_sugar: '血糖测量',
-    growth: '身高体重测量'
+    growth: '身高体重测量',
+    ad_probiotics: 'AD / 益生菌',
+    temperature: '体温记录',
+    other_remark: '随手备注'
   };
   return map[record.type] || '健康记录';
 };
@@ -503,6 +609,16 @@ const getRecordValue = (record: BabyRecord) => {
   if (record.type === 'growth') {
     return `${record.detail.weight_kg}kg / ${record.detail.height_cm}cm`;
   }
+  if (record.type === 'ad_probiotics') {
+    const medMap = { ad: '维生素AD ☀️', probiotics: '益生菌 🌱', mixed: 'AD+益生菌 ☀️🌱', other: '其他营养品 ✨' };
+    return medMap[record.detail.medication_type as 'ad' | 'probiotics' | 'mixed' | 'other'] || '已服用';
+  }
+  if (record.type === 'temperature') {
+    return `${record.detail.temperature}°C`;
+  }
+  if (record.type === 'other_remark') {
+    return '随手记 📝';
+  }
   return '已记录';
 };
 
@@ -511,6 +627,11 @@ const getRecordBadgeStyle = (record: BabyRecord) => {
     const val = record.detail.sugar_value || 0;
     if (val < 3.9) return 'bg-orange-50 text-orange-600 border border-orange-200';
     if (val > 6.1) return 'bg-red-50 text-red-600 border border-red-200';
+    return 'bg-emerald-50 text-emerald-600 border border-emerald-200';
+  }
+  if (record.type === 'temperature') {
+    const val = record.detail.temperature || 36.8;
+    if (val >= 37.3) return 'bg-red-50 text-red-600 border border-red-200 font-bold';
     return 'bg-emerald-50 text-emerald-600 border border-emerald-200';
   }
   return 'bg-gray-50 text-gray-700';
@@ -523,7 +644,10 @@ const getModalTitle = (type: RecordType) => {
     bottle_formula: '记录 🥛 瓶喂配方奶',
     blood_sugar: '记录 🩸 血糖测量',
     diaper: '记录 💩 尿布状况',
-    growth: '记录 ⚖️ 身高体重'
+    growth: '记录 ⚖️ 身高体重',
+    ad_probiotics: '记录 ✨ AD / 益生菌',
+    temperature: '记录 🌡️ 体温监测',
+    other_remark: '记录 📝 随手备注'
   };
   return map[type] || '记录项目';
 };
@@ -632,6 +756,30 @@ const getModalTitle = (type: RecordType) => {
                 <div class="text-[9px] text-emerald-800/80">发育生长指标</div>
               </div>
             </button>
+            <!-- AD / 益生菌 -->
+            <button @click="openModal('ad_probiotics')" class="aspect-square bg-[#E6F9F9] hover:bg-[#C2F5F5] active:scale-95 transition-all rounded-2xl p-2.5 flex flex-col justify-between text-left border border-cyan-100/50">
+              <span class="text-2xl">✨</span>
+              <div>
+                <div class="font-bold text-xs text-cyan-950">AD/益生菌</div>
+                <div class="text-[9px] text-cyan-800/80">补充日常营养</div>
+              </div>
+            </button>
+            <!-- 体温记录 -->
+            <button @click="openModal('temperature')" class="aspect-square bg-[#FFF5ED] hover:bg-[#FFE3D1] active:scale-95 transition-all rounded-2xl p-2.5 flex flex-col justify-between text-left border border-orange-100/50">
+              <span class="text-2xl">🌡️</span>
+              <div>
+                <div class="font-bold text-xs text-orange-950">体温记录</div>
+                <div class="text-[9px] text-orange-800/80">监测身体状况</div>
+              </div>
+            </button>
+            <!-- 其他备注 -->
+            <button @click="openModal('other_remark')" class="aspect-square bg-[#F1F3F5] hover:bg-[#E2E6EA] active:scale-95 transition-all rounded-2xl p-2.5 flex flex-col justify-between text-left border border-slate-200/50">
+              <span class="text-2xl">📝</span>
+              <div>
+                <div class="font-bold text-xs text-slate-950">其他备注</div>
+                <div class="text-[9px] text-slate-800/80">随手记录点滴</div>
+              </div>
+            </button>
           </div>
         </div>
 
@@ -718,6 +866,80 @@ const getModalTitle = (type: RecordType) => {
                 <span class="font-black text-pink-950">{{ todayBreastLiveCount }} 次</span>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- 📊 每日瓶喂奶量分析 -->
+        <div class="bg-white rounded-3xl p-5 shadow-[0_10px_30px_rgba(160,150,130,0.1)] border border-gray-100/50 space-y-4 w-full">
+          <div class="flex justify-between items-center">
+            <h3 class="font-bold text-sm text-gray-800">📊 每日瓶喂奶量分析</h3>
+            <span class="text-[10px] bg-amber-50 text-amber-800 px-2 py-1 rounded-md font-bold">堆叠图分析</span>
+          </div>
+
+          <!-- 日期区间筛选器 -->
+          <div class="bg-amber-50/30 p-3 rounded-2xl border border-amber-100/50 space-y-2">
+            <div class="text-[11px] text-amber-800/80 font-bold flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+              自定义日期范围查看
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <input type="date" v-model="milkChartStartDate" class="flex-1 bg-white border border-gray-100 text-xs rounded-xl p-2 font-bold text-gray-600 focus:outline-none">
+              <span class="text-xs text-gray-400 font-bold">至</span>
+              <input type="date" v-model="milkChartEndDate" class="flex-1 bg-white border border-gray-100 text-xs rounded-xl p-2 font-bold text-gray-600 focus:outline-none">
+            </div>
+          </div>
+
+          <!-- 柱体核心渲染 -->
+          <div v-if="filteredDailyMilkData.length > 0" class="space-y-4">
+            <div class="h-48 flex items-end justify-between px-2 pt-8 relative border-b border-gray-100">
+              <div class="absolute inset-x-0 top-8 border-t border-dashed border-gray-200/50 text-[9px] text-gray-300 pt-0.5 font-bold">800 ml (目标量)</div>
+              <div class="absolute inset-x-0 top-24 border-t border-dashed border-gray-200/50 text-[9px] text-gray-300 pt-0.5 font-bold">400 ml</div>
+
+              <div v-for="day in filteredDailyMilkData" :key="day.date" @click="selectedChartDay = day" class="flex-1 flex flex-col items-center group cursor-pointer relative" :class="{'opacity-60': selectedChartDay && selectedChartDay.date !== day.date}">
+                <!-- 顶部数值显示 -->
+                <span class="absolute -top-5 text-[9px] font-black text-gray-700 whitespace-nowrap scale-90">
+                  {{ day.total > 0 ? day.total + 'ml' : '0' }}
+                </span>
+
+                <div class="w-6 bg-gray-50 rounded-t-md overflow-hidden flex flex-col justify-end relative shadow-inner" style="height: 120px;">
+                  <div class="w-full bg-sky-300/80 hover:bg-sky-300 transition-all" :style="{ height: (day.breastVol / 800) * 120 + 'px' }"></div>
+                  <div class="w-full bg-[#FFE39F] hover:bg-amber-300 transition-all" :style="{ height: (day.formulaVol / 800) * 120 + 'px' }"></div>
+                </div>
+                <span class="text-[9px] text-gray-400 mt-2 font-bold scale-90">{{ day.shortDate }}</span>
+              </div>
+            </div>
+
+            <!-- 图例 -->
+            <div class="flex justify-center gap-4 text-[10px] text-gray-400 font-bold">
+              <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-amber-200"></span>配方奶</span>
+              <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-sky-300"></span>瓶喂母乳</span>
+            </div>
+
+            <!-- 数据明细面板 -->
+            <div v-if="selectedChartDay" class="bg-gray-50 rounded-2xl p-3 border border-gray-100 space-y-2 animate-slide-up">
+              <div class="flex justify-between items-center text-xs border-b border-gray-200/50 pb-1.5">
+                <span class="font-bold text-gray-700">📅 {{ selectedChartDay.date }} 数据明细</span>
+                <button @click="selectedChartDay = null" class="text-[10px] text-gray-400 hover:text-gray-600">关闭</button>
+              </div>
+              <div class="grid grid-cols-3 gap-2 text-center text-[11px]">
+                <div class="bg-white p-2 rounded-xl border border-gray-100">
+                  <div class="text-gray-400">瓶喂配方奶</div>
+                  <div class="font-black text-amber-600 mt-0.5">{{ selectedChartDay.formulaVol }} ml</div>
+                </div>
+                <div class="bg-white p-2 rounded-xl border border-gray-100">
+                  <div class="text-gray-400">瓶喂母乳</div>
+                  <div class="font-black text-sky-600 mt-0.5">{{ selectedChartDay.breastVol }} ml</div>
+                </div>
+                <div class="bg-white p-2 rounded-xl border border-gray-100">
+                  <div class="text-gray-400">瓶喂总量</div>
+                  <div class="font-black text-emerald-600 mt-0.5">{{ selectedChartDay.total }} ml</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="text-center py-10 text-xs text-gray-400 border border-dashed border-gray-100 rounded-2xl">
+            📭 暂无统计区间数据
           </div>
         </div>
 
@@ -810,77 +1032,100 @@ const getModalTitle = (type: RecordType) => {
           </div>
         </div>
 
-        <!-- 📊 每日奶量分析 -->
+        <!-- 🌡️ 宝宝体温曲线 -->
         <div class="bg-white rounded-3xl p-5 shadow-[0_10px_30px_rgba(160,150,130,0.1)] border border-gray-100/50 space-y-4 w-full">
           <div class="flex justify-between items-center">
-            <h3 class="font-bold text-sm text-gray-800">📊 每日瓶喂奶量分析</h3>
-            <span class="text-[10px] bg-amber-50 text-amber-800 px-2 py-1 rounded-md font-bold">堆叠图分析</span>
+            <h3 class="font-bold text-sm text-gray-800 flex items-center gap-1.5">
+              <span class="text-rose-400">🌡️</span> 宝宝体温曲线
+            </h3>
+            <span class="text-[10px] bg-rose-50 text-rose-800 px-2.5 py-1 rounded-md font-bold">体温历史趋势</span>
           </div>
 
-          <!-- 日期区间筛选器 -->
-          <div class="bg-amber-50/30 p-3 rounded-2xl border border-amber-100/50 space-y-2">
-            <div class="text-[11px] text-amber-800/80 font-bold flex items-center gap-1.5">
-              <svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-              自定义日期范围查看
+          <!-- 自定义长日期范围查询 -->
+          <div class="bg-rose-50/30 p-3 rounded-2xl border border-rose-100/50 space-y-2">
+            <div class="text-[11px] text-rose-800/80 font-bold flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+              自定义长日期区间查看
             </div>
             <div class="flex items-center justify-between gap-2">
-              <input type="date" v-model="milkChartStartDate" class="flex-1 bg-white border border-gray-100 text-xs rounded-xl p-2 font-bold text-gray-600 focus:outline-none">
+              <input type="date" v-model="tempChartStartDate" class="flex-1 bg-white border border-gray-100 text-xs rounded-xl p-2 font-bold text-gray-600 focus:outline-none">
               <span class="text-xs text-gray-400 font-bold">至</span>
-              <input type="date" v-model="milkChartEndDate" class="flex-1 bg-white border border-gray-100 text-xs rounded-xl p-2 font-bold text-gray-600 focus:outline-none">
+              <input type="date" v-model="tempChartEndDate" class="flex-1 bg-white border border-gray-100 text-xs rounded-xl p-2 font-bold text-gray-600 focus:outline-none">
             </div>
           </div>
 
-          <!-- 柱体核心渲染 -->
-          <div v-if="filteredDailyMilkData.length > 0" class="space-y-4">
-            <div class="h-48 flex items-end justify-between px-2 pt-8 relative border-b border-gray-100">
-              <div class="absolute inset-x-0 top-8 border-t border-dashed border-gray-200/50 text-[9px] text-gray-300 pt-0.5 font-bold">800 ml (目标量)</div>
-              <div class="absolute inset-x-0 top-24 border-t border-dashed border-gray-200/50 text-[9px] text-gray-300 pt-0.5 font-bold">400 ml</div>
+          <!-- SVG 折线图本体 -->
+          <div class="relative w-full h-40 bg-rose-50/15 rounded-2xl border border-rose-100/20 overflow-hidden flex items-end px-2 pt-6">
+            <svg class="w-full h-full absolute inset-0" viewBox="0 0 100 100" preserveAspectRatio="none" v-if="tempChartPoints.length > 0">
+              <!-- 定义温度渐变 -->
+              <defs>
+                <linearGradient id="tempGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#FCA5A5" stop-opacity="0.35" />
+                  <stop offset="100%" stop-color="#FCA5A5" stop-opacity="0.0" />
+                </linearGradient>
+              </defs>
+              <!-- 辅助参考虚线 (37.3°C 发热线) -->
+              <line x1="0" :y1="tempLimitLineY" x2="100" :y2="tempLimitLineY" stroke="#F87171" stroke-width="0.5" stroke-dasharray="3,3" />
+              <!-- 填充阴影区域 -->
+              <path :d="tempChartAreaPath" fill="url(#tempGrad)"></path>
+              <!-- 描边折线 -->
+              <path :d="tempChartPath" fill="none" stroke="#F87171" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
 
-              <div v-for="day in filteredDailyMilkData" :key="day.date" @click="selectedChartDay = day" class="flex-1 flex flex-col items-center group cursor-pointer relative" :class="{'opacity-60': selectedChartDay && selectedChartDay.date !== day.date}">
-                <!-- 顶部数值显示 -->
-                <span class="absolute -top-5 text-[9px] font-black text-gray-700 whitespace-nowrap scale-90">
-                  {{ day.total > 0 ? day.total + 'ml' : '0' }}
+            <!-- 数据圆点浮层 -->
+            <div v-if="tempChartPoints.length > 0" class="absolute inset-0">
+              <div v-for="(p, idx) in tempChartPoints" :key="p.id" @click="selectedTempPoint = p" class="absolute flex flex-col items-center cursor-pointer transition-all hover:scale-110" :style="{ left: p.x + '%', bottom: p.y + '%', transform: 'translateX(-50%)' }">
+                <!-- 顶部显示温度数字，如果是发热显示警示橙红 -->
+                <span class="bg-white text-[9px] font-black px-1.5 py-0.5 rounded shadow-sm border transform -translate-y-4 whitespace-nowrap" :class="p.isHigh ? 'text-red-600 border-red-200' : 'text-gray-600 border-gray-100'">
+                  {{ p.temp }}°C
                 </span>
-
-                <div class="w-6 bg-gray-50 rounded-t-md overflow-hidden flex flex-col justify-end relative shadow-inner" style="height: 120px;">
-                  <div class="w-full bg-sky-300/80 hover:bg-sky-300 transition-all" :style="{ height: (day.breastVol / 800) * 120 + 'px' }"></div>
-                  <div class="w-full bg-[#FFE39F] hover:bg-amber-300 transition-all" :style="{ height: (day.formulaVol / 800) * 120 + 'px' }"></div>
-                </div>
-                <span class="text-[9px] text-gray-400 mt-2 font-bold scale-90">{{ day.shortDate }}</span>
+                <!-- 圆点本身，发热点有额外的扩散环 -->
+                <span class="w-3 h-3 rounded-full border-2 border-white shadow-md transition-all" :class="[
+                  p.isHigh ? 'bg-red-500 animate-pulse scale-110' : 'bg-rose-400',
+                  selectedTempPoint && selectedTempPoint.id === p.id ? 'ring-4 ring-rose-400/30' : ''
+                ]"></span>
               </div>
             </div>
 
-            <!-- 图例 -->
-            <div class="flex justify-center gap-4 text-[10px] text-gray-400 font-bold">
-              <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-amber-200"></span>配方奶</span>
-              <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded bg-sky-300"></span>瓶喂母乳</span>
-            </div>
-
-            <!-- 数据明细面板 -->
-            <div v-if="selectedChartDay" class="bg-gray-50 rounded-2xl p-3 border border-gray-100 space-y-2 animate-slide-up">
-              <div class="flex justify-between items-center text-xs border-b border-gray-200/50 pb-1.5">
-                <span class="font-bold text-gray-700">📅 {{ selectedChartDay.date }} 数据明细</span>
-                <button @click="selectedChartDay = null" class="text-[10px] text-gray-400 hover:text-gray-600">关闭</button>
-              </div>
-              <div class="grid grid-cols-3 gap-2 text-center text-[11px]">
-                <div class="bg-white p-2 rounded-xl border border-gray-100">
-                  <div class="text-gray-400">瓶喂配方奶</div>
-                  <div class="font-black text-amber-600 mt-0.5">{{ selectedChartDay.formulaVol }} ml</div>
-                </div>
-                <div class="bg-white p-2 rounded-xl border border-gray-100">
-                  <div class="text-gray-400">瓶喂母乳</div>
-                  <div class="font-black text-sky-600 mt-0.5">{{ selectedChartDay.breastVol }} ml</div>
-                </div>
-                <div class="bg-white p-2 rounded-xl border border-gray-100">
-                  <div class="text-gray-400">瓶喂总量</div>
-                  <div class="font-black text-emerald-600 mt-0.5">{{ selectedChartDay.total }} ml</div>
-                </div>
-              </div>
+            <!-- 空状态 -->
+            <div v-else class="absolute inset-0 flex flex-col items-center justify-center text-xs text-gray-400 space-y-2">
+              <span class="text-3xl">🌡️</span>
+              <p class="font-bold">该日期范围内暂无体温记录</p>
+              <p class="scale-90 opacity-75">可在首页通过“体温”按钮快捷新增</p>
             </div>
           </div>
 
-          <div v-else class="text-center py-10 text-xs text-gray-400 border border-dashed border-gray-100 rounded-2xl">
-            📭 暂无统计区间数据
+          <!-- X 轴日期标注 -->
+          <div class="h-4 relative w-full mt-1 px-4" v-if="tempChartPoints.length > 0">
+            <div v-for="(p, idx) in tempChartPoints" :key="'lbl-' + p.id" class="absolute text-[8px] text-gray-400 font-bold transform -translate-x-1/2 whitespace-nowrap scale-95" :style="{ left: p.x + '%' }">
+              {{ p.date }}
+            </div>
+          </div>
+
+          <!-- 测温点明细面板 -->
+          <div v-if="selectedTempPoint" class="bg-rose-50/20 rounded-2xl p-3.5 border border-rose-100/40 space-y-2.5 animate-slide-up">
+            <div class="flex justify-between items-center text-xs border-b border-rose-100/40 pb-2">
+              <span class="font-bold text-gray-700 flex items-center gap-1">
+                <span class="text-rose-500">🌡️</span> 测温数据明细
+              </span>
+              <button @click="selectedTempPoint = null" class="text-[10px] text-gray-400 hover:text-gray-600 font-black">关闭</button>
+            </div>
+            <div class="grid grid-cols-2 gap-3 text-center text-xs">
+              <div class="bg-white p-2 rounded-xl border border-gray-50 flex flex-col justify-center">
+                <div class="text-[10px] text-gray-400 font-bold">测量时间</div>
+                <div class="font-black text-gray-800 mt-0.5">{{ selectedTempPoint.fullDate }}</div>
+              </div>
+              <div class="bg-white p-2 rounded-xl border border-gray-50 flex flex-col justify-center">
+                <div class="text-[10px] text-gray-400 font-bold">体温数值</div>
+                <div class="font-black mt-0.5" :class="selectedTempPoint.isHigh ? 'text-red-600' : 'text-emerald-600'">
+                  {{ selectedTempPoint.temp }} °C {{ selectedTempPoint.isHigh ? '(发热)' : '(正常)' }}
+                </div>
+              </div>
+            </div>
+            <div v-if="selectedTempPoint.remark" class="bg-white/80 p-2.5 rounded-xl border border-gray-50 text-[11px] text-gray-600 font-bold leading-relaxed">
+              <span class="text-gray-400 text-[10px] block mb-0.5">测量备注：</span>
+              {{ selectedTempPoint.remark }}
+            </div>
           </div>
         </div>
 
@@ -934,6 +1179,16 @@ const getModalTitle = (type: RecordType) => {
         </div>
 
       </div>
+
+      <!-- 页脚版权与版本显示 -->
+      <div class="py-6 flex flex-col items-center justify-center gap-1.5 opacity-80 select-none pb-8">
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] text-gray-400 font-bold">🍼 宝宝喂养助手</span>
+          <span class="text-[9px] bg-amber-100/80 text-amber-800 px-1.5 py-0.5 rounded-full font-black scale-90">v{{ version }}</span>
+        </div>
+        <p class="text-[8px] text-gray-300 font-bold">© 2026 Dreamsky · 记录爱与成长</p>
+      </div>
+
     </main>
 
     <!-- 模拟后端 API 控制台 (日志抽屉) -->
@@ -1105,6 +1360,38 @@ const getModalTitle = (type: RecordType) => {
                 <button type="button" @click="form.height_cm = +(form.height_cm + 0.5).toFixed(1)" class="w-8 h-8 rounded-lg bg-white border flex items-center justify-center font-bold text-emerald-800 shadow-sm">+</button>
               </div>
             </div>
+          </div>
+
+          <!-- AD / 益生菌 -->
+          <div v-if="activeModal === 'ad_probiotics'" class="space-y-3">
+            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider">营养补充品类</label>
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button" @click="form.medication_type = 'ad'" class="py-2.5 rounded-xl text-xs font-bold border transition-colors" :class="form.medication_type === 'ad' ? 'bg-cyan-500 text-white border-cyan-500' : 'bg-gray-50 text-gray-500 border-gray-100'">维生素AD ☀️</button>
+              <button type="button" @click="form.medication_type = 'probiotics'" class="py-2.5 rounded-xl text-xs font-bold border transition-colors" :class="form.medication_type === 'probiotics' ? 'bg-cyan-500 text-white border-cyan-500' : 'bg-gray-50 text-gray-500 border-gray-100'">益生菌 🌱</button>
+              <button type="button" @click="form.medication_type = 'mixed'" class="py-2.5 rounded-xl text-xs font-bold border transition-colors" :class="form.medication_type === 'mixed' ? 'bg-cyan-500 text-white border-cyan-500' : 'bg-gray-50 text-gray-500 border-gray-100'">AD + 益生菌 ☀️🌱</button>
+              <button type="button" @click="form.medication_type = 'other'" class="py-2.5 rounded-xl text-xs font-bold border transition-colors" :class="form.medication_type === 'other' ? 'bg-cyan-500 text-white border-cyan-500' : 'bg-gray-50 text-gray-500 border-gray-100'">其他营养品 ✨</button>
+            </div>
+          </div>
+
+          <!-- 体温监测 -->
+          <div v-if="activeModal === 'temperature'" class="space-y-3">
+            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider">宝宝体温 (°C)</label>
+            <div class="flex items-center justify-between p-4 rounded-2xl border transition-colors" :class="form.temperature >= 37.3 ? 'bg-red-50/50 border-red-200' : 'bg-orange-50/30 border-orange-100/30'">
+              <button type="button" @click="form.temperature = Math.max(34.0, +(form.temperature - 0.1).toFixed(1))" class="w-12 h-12 rounded-2xl bg-white border flex items-center justify-center font-bold text-xl shadow-sm" :class="form.temperature >= 37.3 ? 'text-red-800 border-red-200' : 'text-orange-800 border-orange-100'">-</button>
+              <div class="text-center">
+                <input type="number" step="0.1" v-model.number="form.temperature" class="w-24 text-center text-3xl font-black bg-transparent focus:outline-none" :class="form.temperature >= 37.3 ? 'text-red-700' : 'text-orange-950'">
+                <span class="text-xs font-semibold block mt-1" :class="form.temperature >= 37.3 ? 'text-red-400' : 'text-gray-400'">°C</span>
+              </div>
+              <button type="button" @click="form.temperature = Math.min(42.0, +(form.temperature + 0.1).toFixed(1))" class="w-12 h-12 rounded-2xl bg-white border flex items-center justify-center font-bold text-xl shadow-sm" :class="form.temperature >= 37.3 ? 'text-red-800 border-red-200' : 'text-orange-800 border-orange-100'">+</button>
+            </div>
+            <div v-if="form.temperature >= 37.3" class="text-center text-xs font-bold text-red-500 animate-pulse mt-1">
+              ⚠️ 体温偏高，请注意宝宝身体状况！
+            </div>
+          </div>
+
+          <!-- 随手备注 -->
+          <div v-if="activeModal === 'other_remark'" class="bg-slate-50/50 p-4 rounded-2xl border border-slate-100/50 text-center text-xs text-slate-500">
+            ✍️ 请在下方“备忘录”中直接输入您想要记录的事项（例如：洗澡、睡眠、散步等）
           </div>
 
           <!-- 公用补充字段 -->

@@ -1,5 +1,5 @@
 // 记录类型
-export type RecordType = 'breast_live' | 'breast_bottle' | 'bottle_formula' | 'diaper' | 'blood_sugar' | 'growth';
+export type RecordType = 'breast_live' | 'breast_bottle' | 'bottle_formula' | 'diaper' | 'blood_sugar' | 'growth' | 'ad_probiotics' | 'temperature' | 'other_remark';
 
 // 尿布状况
 export type DiaperStatus = 'wet' | 'dirty' | 'mixed';
@@ -17,6 +17,8 @@ export interface RecordDetail {
     diaper_status?: DiaperStatus;   // 尿布类型
     weight_kg?: number;             // 体重 (kg)
     height_cm?: number;             // 身高 (cm)
+    medication_type?: 'ad' | 'probiotics' | 'mixed' | 'other'; // 营养品类型
+    temperature?: number;           // 体温值 (℃)
 }
 
 // 完整的宝宝记录接口
