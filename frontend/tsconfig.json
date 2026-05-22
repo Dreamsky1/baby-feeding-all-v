@@ -6,7 +6,9 @@
       "dom"
     ],
     "moduleResolution": "bundler",
-    "types": ["vite/client"]
-    // 其他配置...
+    "types": ["vite/client"],
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
   }
 }

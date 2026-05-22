@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue';
 import packageInfo from '../package.json';
 // ==================== 类型定义 (TypeScript 安全约束) ====================
-export type RecordType = 'breast_live' | 'breast_bottle' | 'bottle_formula' | 'diaper' | 'blood_sugar' | 'growth';
+export type RecordType = 'breast_live' | 'breast_bottle' | 'bottle_formula' | 'diaper' | 'blood_sugar' | 'growth' | 'ad_probiotics' | 'temperature' | 'other_remark';
 export type DiaperStatus = 'wet' | 'dirty' | 'mixed';
 export type SugarPeriod = 'before_feed' | 'after_feed_1h' | 'after_feed_2h' | 'random';
 
@@ -15,6 +15,8 @@ export interface RecordDetail {
   diaper_status?: DiaperStatus;
   weight_kg?: number;
   height_cm?: number;
+  medication_type?: 'ad' | 'probiotics' | 'mixed' | 'other';
+  temperature?: number;
 }
 
 export interface BabyRecord {
@@ -775,7 +777,7 @@ onMounted(() => {
                 <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                 </svg>
-                <input type="date" v-model="timelineFilterDate" class="bg-transparent text-xs font-bold text-gray-700 focus:outline-none cursor-pointer">
+                <input type="date" v-model="timelineFilterDate" class="bg-transparent text-[16px] font-bold text-gray-700 focus:outline-none cursor-pointer">
               </div>
             </div>
             <button v-show="false" @click="loadMockData" class="text-xs text-[#FF9E9E] hover:underline font-bold self-end pb-1">导入演示数据</button>
@@ -786,17 +788,19 @@ onMounted(() => {
           </div>
 
           <div v-else class="space-y-2.5">
-            <div v-for="record in filteredRecords" :key="record.id" class="bg-[#FBFBFA] hover:bg-gray-50/80 transition-colors rounded-2xl p-3 border border-gray-100/50 flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div class="w-9 h-9 rounded-xl flex items-center justify-center text-lg shadow-sm" :class="getRecordStyle(record.type)">
+            <div v-for="record in filteredRecords" :key="record.id" class="bg-[#FBFBFA] hover:bg-gray-50/80 transition-colors rounded-2xl p-3 border border-gray-100/50 flex items-center justify-between overflow-hidden">
+              <div class="flex items-center gap-3 min-w-0 flex-1 mr-2">
+                <div class="w-9 h-9 rounded-xl flex items-center justify-center text-lg shadow-sm flex-shrink-0" :class="getRecordStyle(record.type)">
                   {{ getRecordIcon(record.type) }}
                 </div>
-                <div>
-                  <div class="font-bold text-xs text-gray-800">{{ getRecordTitle(record) }}</div>
-                  <div class="text-[10px] text-gray-400 flex items-center gap-1.5 mt-0.5 font-medium">
-                    <svg class="w-2.5 h-2.5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    {{ formatTime(record.timestamp) }}
-                    <span v-if="record.remark" class="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded text-[8px] font-bold">备注: {{ record.remark }}</span>
+                <div class="min-w-0 flex-1">
+                  <div class="font-bold text-xs text-gray-800 break-all">{{ getRecordTitle(record) }}</div>
+                  <div class="text-[10px] text-gray-400 flex flex-wrap items-center gap-1.5 mt-0.5 font-medium">
+                    <span class="flex items-center gap-1 flex-shrink-0">
+                      <svg class="w-2.5 h-2.5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                      {{ formatTime(record.timestamp) }}
+                    </span>
+                    <span v-if="record.remark" class="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded text-[8px] font-bold break-all whitespace-pre-wrap max-w-full inline-block">备注: {{ record.remark }}</span>
                   </div>
                 </div>
               </div>
@@ -863,9 +867,9 @@ onMounted(() => {
               自定义日期范围查看
             </div>
             <div class="flex items-center justify-between gap-2">
-              <input type="date" v-model="milkChartStartDate" class="flex-1 bg-white border border-gray-100 text-xs rounded-xl p-2 font-bold text-gray-600 focus:outline-none">
-              <span class="text-xs text-gray-400 font-bold">至</span>
-              <input type="date" v-model="milkChartEndDate" class="flex-1 bg-white border border-gray-100 text-xs rounded-xl p-2 font-bold text-gray-600 focus:outline-none">
+              <input type="date" v-model="milkChartStartDate" class="flex-1 min-w-0 bg-white border border-gray-100 text-[16px] text-center rounded-xl py-1.5 px-1.5 font-bold text-gray-600 focus:outline-none">
+              <span class="text-xs text-gray-400 font-bold shrink-0">至</span>
+              <input type="date" v-model="milkChartEndDate" class="flex-1 min-w-0 bg-white border border-gray-100 text-[16px] text-center rounded-xl py-1.5 px-1.5 font-bold text-gray-600 focus:outline-none">
             </div>
           </div>
 
@@ -1020,9 +1024,9 @@ onMounted(() => {
               自定义长日期区间查看
             </div>
             <div class="flex items-center justify-between gap-2">
-              <input type="date" v-model="tempChartStartDate" class="flex-1 bg-white border border-gray-100 text-xs rounded-xl p-2 font-bold text-gray-600 focus:outline-none">
-              <span class="text-xs text-gray-400 font-bold">至</span>
-              <input type="date" v-model="tempChartEndDate" class="flex-1 bg-white border border-gray-100 text-xs rounded-xl p-2 font-bold text-gray-600 focus:outline-none">
+              <input type="date" v-model="tempChartStartDate" class="flex-1 min-w-0 bg-white border border-gray-100 text-[16px] text-center rounded-xl py-1.5 px-1.5 font-bold text-gray-600 focus:outline-none">
+              <span class="text-xs text-gray-400 font-bold shrink-0">至</span>
+              <input type="date" v-model="tempChartEndDate" class="flex-1 min-w-0 bg-white border border-gray-100 text-[16px] text-center rounded-xl py-1.5 px-1.5 font-bold text-gray-600 focus:outline-none">
             </div>
           </div>
 
@@ -1303,7 +1307,7 @@ onMounted(() => {
               <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider">体重 (kg)</label>
               <div class="flex items-center justify-between bg-emerald-50/30 p-3 rounded-2xl border border-emerald-100/30">
                 <button type="button" @click="form.weight_kg = Math.max(0.01, +(form.weight_kg - 0.1).toFixed(2))" class="w-8 h-8 rounded-lg bg-white border flex items-center justify-center font-bold text-emerald-800 shadow-sm">-</button>
-                <input type="number" step="0.01" v-model.number="form.weight_kg" class="w-16 text-center font-bold bg-transparent text-emerald-950 focus:outline-none">
+                <input type="number" step="0.01" v-model.number="form.weight_kg" class="w-16 text-center text-[16px] font-bold bg-transparent text-emerald-950 focus:outline-none">
                 <button type="button" @click="form.weight_kg = +(form.weight_kg + 0.1).toFixed(2)" class="w-8 h-8 rounded-lg bg-white border flex items-center justify-center font-bold text-emerald-800 shadow-sm">+</button>
               </div>
             </div>
@@ -1311,7 +1315,7 @@ onMounted(() => {
               <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider">身高 (cm)</label>
               <div class="flex items-center justify-between bg-emerald-50/30 p-3 rounded-2xl border border-emerald-100/30">
                 <button type="button" @click="form.height_cm = Math.max(0.1, +(form.height_cm - 0.5).toFixed(1))" class="w-8 h-8 rounded-lg bg-white border flex items-center justify-center font-bold text-emerald-800 shadow-sm">-</button>
-                <input type="number" step="0.1" v-model.number="form.height_cm" class="w-16 text-center font-bold bg-transparent text-emerald-950 focus:outline-none">
+                <input type="number" step="0.1" v-model.number="form.height_cm" class="w-16 text-center text-[16px] font-bold bg-transparent text-emerald-950 focus:outline-none">
                 <button type="button" @click="form.height_cm = +(form.height_cm + 0.5).toFixed(1)" class="w-8 h-8 rounded-lg bg-white border flex items-center justify-center font-bold text-emerald-800 shadow-sm">+</button>
               </div>
             </div>
@@ -1354,12 +1358,12 @@ onMounted(() => {
             <div class="flex gap-4">
               <div class="flex-grow space-y-1">
                 <label class="block text-[11px] font-bold text-gray-400">时间选择 (默认当前时间)</label>
-                <input type="datetime-local" v-model="form.timestamp" class="w-full bg-gray-50 border border-gray-100 text-xs rounded-xl p-2.5 font-semibold text-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
+                <input type="datetime-local" v-model="form.timestamp" class="w-full bg-gray-50 border border-gray-100 text-[16px] rounded-xl p-2.5 font-semibold text-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
               </div>
             </div>
             <div class="space-y-1">
               <label class="block text-[11px] font-bold text-gray-400">备忘录</label>
-              <input type="text" v-model="form.remark" placeholder="如: 吃得很慢 / 精神状态佳" class="w-full bg-gray-50 border border-gray-100 text-xs rounded-xl p-2.5 text-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
+              <input type="text" v-model="form.remark" placeholder="如: 吃得很慢 / 精神状态佳" class="w-full bg-gray-50 border border-gray-100 text-[16px] rounded-xl p-2.5 text-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-200">
             </div>
           </div>
 

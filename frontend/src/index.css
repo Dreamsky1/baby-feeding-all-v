@@ -2,9 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow-x: hidden;
+    overflow-y: hidden;
+    background-color: #F5F3ED;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     -webkit-tap-highlight-color: transparent;
+}
+
+#app {
+    width: 100%;
+    height: 100%;
+    overflow-x: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #F5F3ED;
 }
 
 /* 隐藏滚动条但保留滚动功能 */
@@ -15,3 +32,15 @@ body {
     -ms-overflow-style: none;
     scrollbar-width: none;
 }
+
+/* 彻底隐藏 Chrome/Safari 等 Webkit 内核浏览器中 input[type="date"] 的原生日历图标与清除/微调按钮，腾出宝贵的横向物理空间 */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    display: none !important;
+    -webkit-appearance: none;
+}
+input[type="date"]::-webkit-inner-spin-button,
+input[type="date"]::-webkit-clear-button {
+    display: none !important;
+    -webkit-appearance: none;
+}
+
