@@ -344,6 +344,40 @@ const deleteRecord = async (id) => {
   }
 };
 
+const recordToDelete = ref<BabyRecord | null>(null);
+
+const triggerDeleteRecord = (record: BabyRecord) => {
+  recordToDelete.value = record;
+};
+
+const cancelDelete = () => {
+  recordToDelete.value = null;
+};
+
+const confirmDelete = async () => {
+  if (!recordToDelete.value) return;
+  await deleteRecord(recordToDelete.value.id);
+  recordToDelete.value = null;
+};
+
+const getRecordTypeName = (record: BabyRecord | null) => {
+  if (!record) return '';
+  const names: Record<RecordType, string> = {
+    breast_live: '亲喂母乳 🍼',
+    breast_bottle: '瓶喂母乳 🍼',
+    bottle_formula: '配方奶 🍼',
+    diaper: '排便记录 🚽💩',
+    blood_sugar: '血糖记录 🩸',
+    growth: '生长数据 📈',
+    ad_probiotics: '营养补充 ✨',
+    temperature: '体温记录 🌡️',
+    other_remark: '日常备注 📝'
+  };
+  return names[record.type] || '记录项';
+};
+
+
+
 const loadMockData = async () => {
   try {
     const res = await fetch('/api/records/reset', { method: 'POST' });
@@ -808,7 +842,7 @@ onMounted(() => {
                 <span class="text-[11px] font-black px-2.5 py-0.5 rounded-full" :class="getRecordBadgeStyle(record)">
                   {{ getRecordValue(record) }}
                 </span>
-                <button @click="deleteRecord(record.id)" class="text-gray-300 hover:text-red-400 p-1.5 transition-colors">
+                <button @click="triggerDeleteRecord(record)" class="text-gray-300 hover:text-red-400 p-1.5 transition-colors">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                 </button>
               </div>
@@ -1373,6 +1407,45 @@ onMounted(() => {
             <span>保存记录 (发送至API)</span>
           </button>
         </form>
+      </div>
+    </div>
+
+    <!-- 删除确认模态框 (毛玻璃遮罩 + 自定义居中精美弹框) -->
+    <div v-if="recordToDelete" class="fixed inset-0 bg-black/60 backdrop-blur-[2px] z-[60] flex items-center justify-center p-6">
+      <div class="bg-white rounded-[28px] p-6 space-y-5 shadow-2xl w-full max-w-[290px] text-center border border-gray-100/50 animate-slide-up">
+        <div class="w-14 h-14 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto shadow-inner">
+          <svg class="w-8 h-8 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        </div>
+        
+        <div class="space-y-1">
+          <h4 class="font-black text-gray-800 text-base">要删除这条记录吗？</h4>
+          <p class="text-[11px] text-gray-400 font-bold">删除后喂养历史将无法找回哦 🍼</p>
+        </div>
+
+        <!-- 待删除记录的信息预览，防手抖误删 -->
+        <div class="bg-gray-50/60 p-3 rounded-2xl border border-gray-100/50 text-[11px] text-gray-500 font-bold space-y-1.5 text-left">
+          <div class="flex justify-between items-center">
+            <span class="text-gray-400">记录类型</span>
+            <span class="text-gray-700 font-extrabold">{{ getRecordTypeName(recordToDelete) }}</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-gray-400">记录数值</span>
+            <span class="text-gray-700 font-black">{{ getRecordValue(recordToDelete!) }}</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-gray-400">测量时间</span>
+            <span class="text-gray-700 font-extrabold">{{ formatTime(recordToDelete!.timestamp) }}</span>
+          </div>
+        </div>
+
+        <div class="flex gap-3 pt-1">
+          <button type="button" @click="cancelDelete" class="flex-1 py-3 rounded-2xl bg-gray-100 text-xs font-black text-gray-500 hover:bg-gray-200 hover:text-gray-600 active:scale-95 transition-all">
+            取消
+          </button>
+          <button type="button" @click="confirmDelete" class="flex-1 py-3 rounded-2xl bg-gradient-to-r from-red-500 to-rose-500 text-xs font-black text-white hover:from-red-600 hover:to-rose-600 shadow-md shadow-red-200/50 active:scale-95 transition-all">
+            确认删除
+          </button>
+        </div>
       </div>
     </div>
 

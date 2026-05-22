@@ -1,26 +1,8 @@
 [
   {
-    "id": "rec_1779439271513",
-    "timestamp": "2026-05-22T16:41",
-    "type": "bottle_formula",
-    "detail": {
-      "bottle_volume_ml": 90
-    },
-    "remark": ""
-  },
-  {
-    "id": "rec_1779438818064",
-    "timestamp": "2026-05-22T16:33",
-    "type": "bottle_formula",
-    "detail": {
-      "bottle_volume_ml": 90
-    },
-    "remark": ""
-  },
-  {
-    "id": "rec_1779438797794",
-    "timestamp": "2026-05-22T16:33",
-    "type": "bottle_formula",
+    "id": "rec_1779440256204",
+    "timestamp": "2026-05-22T16:57",
+    "type": "breast_bottle",
     "detail": {
       "bottle_volume_ml": 90
     },
