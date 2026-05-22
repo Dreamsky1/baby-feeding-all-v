@@ -1,0 +1,17 @@
+# Node
+node_modules/
+**/node_modules/
+
+# Production / Build
+dist/
+**/dist/
+
+# IDE / System
+.idea/
+.DS_Store
+Thumbs.db
+.antigravitycli/
+
+# Environment variables
+.env
+.env.*

@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "es2016",
+    "lib": [
+      "es2016",
+      "dom"
+    ],
+    "moduleResolution": "bundler",
+    "types": ["vite/client"]
+    // 其他配置...
+  }
+}
